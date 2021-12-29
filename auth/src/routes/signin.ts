@@ -1,7 +1,11 @@
 import express, { Request, Response } from 'express';
-import { body, validationResult } from 'express-validator';
+import jwt from 'jsonwebtoken';
+import { body } from 'express-validator';
 
-import { RequestValidationError } from '../errors/request-validation-error';
+import { Password } from '../services/password';
+import { User } from '../models/user';
+import { validateRequest } from '../middlewares/validate-request';
+import { BadRequestError } from '../errors/bad-request-error';
 
 const router = express.Router();
 
@@ -14,13 +18,31 @@ router.post('/api/users/signin',
       .trim()
       .notEmpty()
       .withMessage('You must suppy a password')
-  ], 
-  (req: Request, res: Response ) => {
-    const errors = validationResult(req);
+  ],
+  validateRequest, 
+  async (req: Request, res: Response ) => {
+    const { email, password } = req.body;
 
-    if (!errors.isEmpty()) {
-      throw new RequestValidationError(errors.array());
+    const existingUser = await User.findOne({ email });
+    if (!existingUser) {
+      throw new BadRequestError('Invalid credentials');
     }
+
+    const passwordsMatch = await Password.compare(existingUser.password, password);
+    if (!passwordsMatch) {
+      throw new BadRequestError('Invalid credentials');
+    }
+
+    const userJwt = jwt.sign({
+      id: existingUser.id,
+      email: existingUser.email
+    }, process.env.JWT_KEY!);
+  
+    req.session = {
+      jwt: userJwt
+    };
+  
+    return res.status(200).send(existingUser);
   }
 );
 

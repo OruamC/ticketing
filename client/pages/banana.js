@@ -1,5 +1,0 @@
-const Title = () => {
-  return <h1>Banana</h1>;
-};
-
-export default Title;
